@@ -1,0 +1,55 @@
+services:
+  kafka-broker:
+    image: apache/kafka:latest
+    container_name: kafka-broker
+    ports:
+      - "9092:9092"
+    environment:
+       # Configure listeners for both docker and host communication
+      KAFKA_LISTENERS: CONTROLLER://localhost:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka-broker:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      
+      # Settings required for KRaft mode
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091
+
+      # Listener to use for broker-to-broker communication
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+
+      # Required for a single node cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 9lXm4kN5NLSMoQyK
+    networks:
+      - order-system-network
+
+  svc-order:
+    build: ./svc-order
+    container_name: svc-order
+    depends_on:
+      - kafka-broker
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKER: kafka-broker:9093
+    networks:
+      - order-system-network
+    restart: on-failure
+
+  svc-inventory:
+    build: ./svc-inventory
+    container_name: svc-inventory
+    depends_on:
+      - kafka-broker
+    environment:
+      KAFKA_BROKER: kafka-broker:9093
+    networks:
+      - order-system-network
+    restart: on-failure
+
+networks:
+  order-system-network:
+    driver: bridge
