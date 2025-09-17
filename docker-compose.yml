@@ -5,12 +5,12 @@ services:
     ports:
       - "9092:9092"
     environment:
-       # Configure listeners for both docker and host communication
+      # Configure listeners for both docker and host communication
       KAFKA_LISTENERS: CONTROLLER://localhost:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka-broker:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
       # Settings required for KRaft mode
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -29,26 +29,111 @@ services:
   svc-order:
     build: ./svc-order
     container_name: svc-order
-    depends_on:
-      - kafka-broker
+    restart: on-failure
     ports:
       - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_started
     environment:
-      KAFKA_BROKER: kafka-broker:9093
+      KAFKA_BROKERS: kafka-broker:9093
+      DATABASE_URL: postgres://app:app_secret@postgres:5432/shop?sslmode=require
     networks:
       - order-system-network
-    restart: on-failure
 
   svc-inventory:
     build: ./svc-inventory
     container_name: svc-inventory
+    restart: on-failure
     depends_on:
-      - kafka-broker
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_started
     environment:
-      KAFKA_BROKER: kafka-broker:9093
+      KAFKA_BROKERS: kafka-broker:9093
+      DATABASE_URL: postgres://app:app_secret@postgres:5432/shop?sslmode=require
     networks:
       - order-system-network
-    restart: on-failure
+
+  postgres:
+    image: postgres:16.10-alpine
+    container_name: postgres
+    restart: unless-stopped
+    shm_size: 128mb
+    depends_on:
+      ssl-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DB: shop
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_secret
+      APP_DB_USER: app
+      APP_DB_PASS: app_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ssl-init:/var/lib/postgresql/ssl
+    command: >
+      postgres
+        -c ssl=on
+        -c ssl_cert_file=/var/lib/postgresql/ssl/postgres-db.crt
+        -c ssl_key_file=/var/lib/postgresql/ssl/postgres-db.key
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d shop"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - order-system-network
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - order-system-network
+
+  ssl-init:
+    image: alpine
+    container_name: ssl-init
+    volumes:
+      - ssl-init:/ssl
+    command: |
+      sh -c '
+        if [ ! -f /ssl/postgres-db.key ]; then
+          echo "Creating SSL certificates..."
+          apk add --no-cache openssl
+          openssl req -new -x509 -days 365 -nodes -text \
+            -out /ssl/postgres-db.crt \
+            -keyout /ssl/postgres-db.key \
+            -subj "/CN=postgres"
+        else
+          echo "SSL certificates already exist"
+        fi
+        
+        echo "Setting correct permissions..."
+        chmod 600 /ssl/postgres-db.key
+        chmod 644 /ssl/postgres-db.crt
+        chown 70:70 /ssl/postgres-db.key /ssl/postgres-db.crt
+        ls -la /ssl/
+        echo "Permissions set successfully"
+      '
+volumes:
+  ssl-init:
+  db:
+    driver: local
 
 networks:
   order-system-network:

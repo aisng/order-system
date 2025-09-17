@@ -24,7 +24,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	var order dto.Order
 
 	if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
-		log.Printf("Error decoding orderL %v", err)
+		log.Printf("Error decoding order: %v", err)
 		http.Error(w, "Invalid request JSON", http.StatusBadRequest)
 		return
 	}
@@ -35,6 +35,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Creating order: %+v", order)
 
 	if err := h.Producer.PublishOrderCreated(order); err != nil {
+		log.Printf("error publishing order.created event: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to process order: %v", err), http.StatusInternalServerError)
 		return
 	}

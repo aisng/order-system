@@ -12,10 +12,7 @@ import (
 )
 
 func main() {
-	kafkaBroker := os.Getenv("KAFKA_BROKER")
-	if kafkaBroker == "" {
-		kafkaBroker = "localhost:9092"
-	}
+	kafkaBroker := os.Getenv("KAFKA_BROKERS")
 
 	log.Printf("Starting svc-order...")
 	log.Printf("Connecting to Kafka at: %s", kafkaBroker)

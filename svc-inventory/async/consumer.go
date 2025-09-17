@@ -2,7 +2,9 @@ package async
 
 import (
 	"context"
+	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -42,8 +44,7 @@ func (c *Consumer) Start(ctx context.Context, handler func(kafka.Message) error)
 			message, err := c.ReadMessage(msgCtx)
 			cancel()
 			if err != nil {
-				if err == context.DeadlineExceeded {
-					log.Println("No messages, still waiting...")
+				if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") {
 					continue
 				}
 				log.Printf("Error reading message: %v", err)

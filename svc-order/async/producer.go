@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"svc-order/dto"
 
 	"github.com/segmentio/kafka-go"
@@ -29,13 +30,14 @@ func (p *Producer) Close() error {
 }
 
 func (p *Producer) PublishOrderCreated(order dto.Order) error {
+	log.Printf("producer receved order: %+v", order)
 	event := dto.OrderCreatedEvent{
-		OrderID:      order.ID,
 		BuyerAddress: order.BuyerAddress,
-		Item:         order.Item,
-		Quantity:     order.Quantity,
-		Amount:       order.Amount,
+		ItemID:       order.ItemID,
+		OrderID:      order.ID,
 	}
+
+	log.Printf("producer created event: %+v", event)
 
 	eventJSON, err := json.Marshal(event)
 	if err != nil {

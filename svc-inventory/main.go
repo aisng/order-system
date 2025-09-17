@@ -8,32 +8,55 @@ import (
 	"strings"
 	"svc-inventory/async"
 	"svc-inventory/handlers"
+	"sync"
 	"syscall"
 )
 
 func main() {
-	kafkaBroker := os.Getenv("KAFKA_BROKER")
-	if kafkaBroker == "" {
-		kafkaBroker = "localhost:9092"
-	}
-
 	log.Printf("Starting svc-inventory...")
-	log.Printf("Connecting to Kafka at: %s", kafkaBroker)
 
-	brokers := strings.Split(kafkaBroker, ",")
-	consumer := async.NewConsumer(brokers, "order.created", "inventory-group")
-	defer consumer.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := setupShudown()
 	defer cancel()
 
+	consumerWG := startConsumer(ctx)
+	waitForShudownSignal()
+	log.Println("shudown signal received, stopping consumer")
+
+	cancel()
+
+	consumerWG.Wait()
+}
+
+func setupShudown() (context.Context, context.CancelFunc) {
+	return context.WithCancel(context.Background())
+}
+
+func waitForShudownSignal() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+}
+
+func startConsumer(ctx context.Context) *sync.WaitGroup {
+	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
+	log.Printf("brokers from env: %s", brokers)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
-		<-sigChan
-		log.Println("Shutdown signal received")
-		cancel()
+		defer wg.Done()
+		consumer := async.NewConsumer(
+			brokers,
+			"order.created",
+			"inventory-group",
+		)
+		defer consumer.Close()
+
+		log.Println("Starting Kafka consumer...")
+		consumer.Start(ctx, handlers.HandleOrderCreated)
+		log.Println("Consumer stopped")
 	}()
 
-	consumer.Start(ctx, handlers.HandleOrderCreated)
+	return &wg
 }
