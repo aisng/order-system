@@ -35,6 +35,22 @@ func (r *Repository) CreateOrder(itemID, address, status string) (int, error) {
 	return orderID, nil
 }
 
+func (r *Repository) UpdateOrderStatus(orderID, newStatus string) (int, error) {
+	query := `
+	UPDATE orders
+	WHERE id = ($1)
+	SET status = ($2)
+	RETURNING id
+	`
+
+	var updatedOrderId int
+	err := r.db.QueryRow(context.Background(), query, orderID, newStatus).Scan(&updatedOrderId)
+	if err != nil {
+		return 0, err
+	}
+	return updatedOrderId, nil
+}
+
 func initDb() *pgx.Conn {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {

@@ -27,11 +27,7 @@ func NewConsumer(brokers []string, topic, groupID string) *Consumer {
 	}
 }
 
-func (c *Consumer) ReadMessage(ctx context.Context) (kafka.Message, error) {
-	return c.Reader.ReadMessage(ctx)
-}
-
-func (c *Consumer) Start(ctx context.Context, handler func(kafka.Message) error) {
+func (c *Consumer) ProcessMessages(ctx context.Context, handler func(kafka.Message) error) {
 	log.Printf("Starting consumer...")
 
 	for {
@@ -41,7 +37,7 @@ func (c *Consumer) Start(ctx context.Context, handler func(kafka.Message) error)
 			return
 		default:
 			msgCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			message, err := c.ReadMessage(msgCtx)
+			message, err := c.Reader.ReadMessage(msgCtx)
 			cancel()
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") {

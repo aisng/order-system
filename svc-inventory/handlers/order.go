@@ -29,3 +29,21 @@ func HandleOrderCreated(message kafka.Message) error {
 	log.Printf("created order id: %d", orderID)
 	return nil
 }
+
+func HandleOrderUpdated(message kafka.Message) error {
+	log.Printf("Processing message: %s", string(message.Value))
+
+	var event dto.OrderUpdatedEvent
+	if err := json.Unmarshal(message.Value, &event); err != nil {
+		return err
+	}
+
+	repo := persistence.NewRepository()
+	orderID, err := repo.UpdateOrderStatus(event.OrderID, event.StatusTo)
+	if err != nil {
+		return fmt.Errorf("Failed to create order: %s", err.Error())
+	}
+
+	log.Printf("created order id: %d", orderID)
+	return nil
+}

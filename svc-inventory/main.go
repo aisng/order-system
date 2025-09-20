@@ -18,13 +18,16 @@ func main() {
 	ctx, cancel := setupShudown()
 	defer cancel()
 
-	consumerWG := startConsumer(ctx)
+	var wg sync.WaitGroup
+
+	startOrderConsumer(ctx, &wg)
+
 	waitForShudownSignal()
 	log.Println("shudown signal received, stopping consumer")
 
 	cancel()
 
-	consumerWG.Wait()
+	wg.Wait()
 }
 
 func setupShudown() (context.Context, context.CancelFunc) {
@@ -37,26 +40,25 @@ func waitForShudownSignal() {
 	<-sigChan
 }
 
-func startConsumer(ctx context.Context) *sync.WaitGroup {
-	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
-	log.Printf("brokers from env: %s", brokers)
-
-	var wg sync.WaitGroup
+func startOrderConsumer(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
 		consumer := async.NewConsumer(
-			brokers,
+			getBrokers(),
 			"order.created",
 			"inventory-group",
 		)
 		defer consumer.Close()
 
-		log.Println("Starting Kafka consumer...")
-		consumer.Start(ctx, handlers.HandleOrderCreated)
-		log.Println("Consumer stopped")
+		log.Println("Starting Order consumer...")
+		consumer.ProcessMessages(ctx, handlers.HandleOrderCreated)
+		log.Println("Order Consumer stopped")
 	}()
 
-	return &wg
+}
+
+func getBrokers() []string {
+	return strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 }

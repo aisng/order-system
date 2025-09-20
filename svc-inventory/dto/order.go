@@ -12,3 +12,9 @@ type OrderCreatedEvent struct {
 	BuyerAddress string `json:"buyer_address"`
 	ItemID       string `json:"item_id"`
 }
+
+type OrderUpdatedEvent struct {
+	OrderID    string `json:"id"`
+	StatusFrom string `json:"status_from"`
+	StatusTo   string `json:"status_to"`
+}
