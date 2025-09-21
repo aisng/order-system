@@ -13,7 +13,7 @@ import (
 func HandleOrderCreated(msg async.Message) error {
 	log.Printf("Processing message: %s", string(msg.Value()))
 
-	var orderCreated dto.OrderCreatedEvent
+	var orderCreated dto.OrderEvent
 	if err := json.Unmarshal(msg.Value(), &orderCreated); err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func HandleOrderCreated(msg async.Message) error {
 			Status:  status,
 		}
 
-		fmt.Printf("producing message: %+v", itemUnavailable)
+		log.Printf("producing message: %+v", itemUnavailable)
 		err := producer.PublishEvent("item.unavailabe", orderCreated.OrderID, itemUnavailable)
 		if err != nil {
 			log.Printf("Failed to publish unavailable event: %v", err)
