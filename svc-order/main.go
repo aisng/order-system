@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"svc-order/async"
 	"svc-order/handlers"
 
@@ -12,14 +10,9 @@ import (
 )
 
 func main() {
-	kafkaBroker := os.Getenv("KAFKA_BROKERS")
-
 	log.Printf("Starting svc-order...")
-	log.Printf("Connecting to Kafka at: %s", kafkaBroker)
 
-	brokers := strings.Split(kafkaBroker, ",")
-	producer := async.NewProducer(brokers, "order.created")
-	defer producer.Close()
+	producer := async.NewProducer(async.GetBrokers())
 
 	orderHander := handlers.NewOrderHandler(producer)
 

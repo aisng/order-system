@@ -4,49 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"svc-order/dto"
 
 	"github.com/segmentio/kafka-go"
 )
 
-type Producer struct {
-	Writer *kafka.Writer
+type Producer interface {
+	PublishEvent(topic, key string, event any) error
 }
 
-func NewProducer(brokers []string, topic string) *Producer {
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: brokers,
-		Topic:   topic,
-	})
-
-	return &Producer{
-		Writer: writer,
-	}
+func NewProducer(brokers []string) Producer {
+	return &kafkaProducer{brokers: brokers}
 }
 
-func (p *Producer) Close() error {
-	return p.Writer.Close()
+type kafkaProducer struct {
+	brokers []string
 }
 
-func (p *Producer) PublishOrderCreated(order dto.Order) error {
-	log.Printf("producer receved order: %+v", order)
-	event := dto.OrderCreatedEvent{
-		BuyerAddress: order.BuyerAddress,
-		ItemID:       order.ItemID,
-		OrderID:      order.ID,
+func (p *kafkaProducer) PublishEvent(topic, key string, event any) error {
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP(p.brokers...),
+		Topic:    topic,
+		Balancer: &kafka.LeastBytes{},
 	}
 
-	log.Printf("producer created event: %+v", event)
+	defer writer.Close()
 
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("Error marshalling event: %v", err)
 	}
 
-	err = p.Writer.WriteMessages(context.Background(),
+	err = writer.WriteMessages(context.Background(),
 		kafka.Message{
-			Key:   []byte(order.ID),
+			Key:   []byte(key),
 			Value: eventJSON,
 		},
 	)
