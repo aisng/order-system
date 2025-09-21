@@ -19,36 +19,20 @@ func NewRepository() *Repository {
 	}
 }
 
-func (r *Repository) CreateOrder(itemID, address, status string) (int, error) {
+func (r *Repository) FetchItemStatus(itemID string) (string, error) {
 	query := `
-	INSERT INTO orders (item_id, address, status)
-	VALUES ($1, $2, $3)
-	RETURNING id
+	SELECT status
+	FROM items
+	WHERE id = $1
 	`
 
-	var orderID int
-	err := r.db.QueryRow(context.Background(), query, itemID, address, status).Scan(&orderID)
+	var status string
+	err := r.db.QueryRow(context.Background(), query, itemID).Scan(&status)
 	if err != nil {
-		return 0, fmt.Errorf("failed create on order: %w", err)
+		return "", err
 	}
 
-	return orderID, nil
-}
-
-func (r *Repository) UpdateOrderStatus(orderID, newStatus string) (int, error) {
-	query := `
-	UPDATE orders
-	WHERE id = ($1)
-	SET status = ($2)
-	RETURNING id
-	`
-
-	var updatedOrderId int
-	err := r.db.QueryRow(context.Background(), query, orderID, newStatus).Scan(&updatedOrderId)
-	if err != nil {
-		return 0, err
-	}
-	return updatedOrderId, nil
+	return status, nil
 }
 
 func initDb() *pgx.Conn {

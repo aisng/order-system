@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"svc-inventory/async"
 	"svc-inventory/handlers"
 	"sync"
@@ -46,7 +45,7 @@ func startOrderConsumer(ctx context.Context, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		consumer := async.NewConsumer(
-			getBrokers(),
+			async.GetBrokers(),
 			"order.created",
 			"inventory-group",
 		)
@@ -57,8 +56,4 @@ func startOrderConsumer(ctx context.Context, wg *sync.WaitGroup) {
 		log.Println("Order Consumer stopped")
 	}()
 
-}
-
-func getBrokers() []string {
-	return strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 }

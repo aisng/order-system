@@ -10,11 +10,18 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-type Consumer struct {
-	Reader *kafka.Reader
+type Consumer interface {
+	ProcessMessages(ctx context.Context, handler MessageHandler)
+	Close() error
 }
 
-func NewConsumer(brokers []string, topic, groupID string) *Consumer {
+type MessageHandler func(Message) error
+
+type kafkaConsumer struct {
+	reader *kafka.Reader
+}
+
+func NewConsumer(brokers []string, topic, groupID string) Consumer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  brokers,
 		Topic:    topic,
@@ -22,12 +29,10 @@ func NewConsumer(brokers []string, topic, groupID string) *Consumer {
 		MaxBytes: 10e6,
 	})
 
-	return &Consumer{
-		Reader: reader,
-	}
+	return &kafkaConsumer{reader: reader}
 }
 
-func (c *Consumer) ProcessMessages(ctx context.Context, handler func(kafka.Message) error) {
+func (c *kafkaConsumer) ProcessMessages(ctx context.Context, handler MessageHandler) {
 	log.Printf("Starting consumer...")
 
 	for {
@@ -37,7 +42,7 @@ func (c *Consumer) ProcessMessages(ctx context.Context, handler func(kafka.Messa
 			return
 		default:
 			msgCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			message, err := c.Reader.ReadMessage(msgCtx)
+			kafkaMsg, err := c.reader.ReadMessage(msgCtx)
 			cancel()
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded") {
@@ -47,15 +52,20 @@ func (c *Consumer) ProcessMessages(ctx context.Context, handler func(kafka.Messa
 				continue
 			}
 
-			log.Printf("Received message: key=%s, offset=%d",
-				string(message.Key), message.Offset)
+			log.Printf("Received message: key=%s, offset=%d", string(kafkaMsg.Key), kafkaMsg.Offset)
+
+			message := &kafkaMessage{
+				key:   string(kafkaMsg.Key),
+				value: kafkaMsg.Value,
+				topic: kafkaMsg.Topic,
+			}
+
 			if err := handler(message); err != nil {
 				log.Printf("Error proccessing message: %v", err)
 			}
 		}
 	}
 }
-func (c *Consumer) Close() error {
-	log.Println("Closing consumer...")
-	return c.Reader.Close()
+func (c *kafkaConsumer) Close() error {
+	return c.reader.Close()
 }
