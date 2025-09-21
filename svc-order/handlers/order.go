@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"svc-order/async"
 	"svc-order/dto"
+	"svc-order/persistence"
 	"time"
 )
 
@@ -33,6 +34,15 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.Status = "pending"
 
 	log.Printf("Creating order: %+v", order)
+
+	repo := persistence.NewRepository()
+	orderID, err := repo.CreateOrder(order.ItemID, order.BuyerAddress, order.Status)
+
+	if err != nil {
+		log.Printf("failed to persist order: id %d: %v", orderID, err)
+		http.Error(w, fmt.Sprintf("failed to persist order: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	if err := h.Producer.PublishOrderCreated(order); err != nil {
 		log.Printf("error publishing order.created event: %v", err)
